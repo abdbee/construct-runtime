@@ -14,8 +14,11 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+use frame_support::sp_runtime::traits::StaticLookup;	
+
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;	
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
@@ -23,8 +26,11 @@ pub mod pallet {
 	pub struct Pallet<T>(_);
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
+	// alias for account lookup	
+	type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config: frame_system::Config + pallet_balances::Config + pallet_identity::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 	}
@@ -54,6 +60,8 @@ pub mod pallet {
 		NoneValue,
 		/// Errors should have helpful documentation associated with them.
 		StorageOverflow,
+		/// Error when sender has no identity	
+		NotAuthorized,
 	}
 
 	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
@@ -65,19 +73,19 @@ pub mod pallet {
 		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
 		#[pallet::call_index(0)]
 		#[pallet::weight(10_000 + T::DbWeight::get().writes(1).ref_time())]
-		pub fn do_something(origin: OriginFor<T>, something: u32) -> DispatchResult {
-			// Check that the extrinsic was signed and get the signer.
-			// This function will return an error if the extrinsic is not signed.
-			// https://docs.substrate.io/main-docs/build/origins/
-			let who = ensure_signed(origin)?;
+		pub fn make_identity_transfer(
+            origin: OriginFor<T>,
+            dest: AccountIdLookupOf<T>,
+            #[pallet::compact] value: T::Balance,
+        ) -> DispatchResultWithPostInfo {
+			let sender = ensure_signed(origin)?;
+            let dest = T::Lookup::lookup(dest)?;
+			let lookup_dest = T::Lookup::unlookup(dest);
+            ensure!(pallet_identity::Pallet::has_identity(&sender,1), Error::NotAuthorized);
 
-			// Update storage.
-			<Something<T>>::put(something);
-
-			// Emit an event.
-			Self::deposit_event(Event::SomethingStored { something, who });
-			// Return a successful DispatchResultWithPostInfo
-			Ok(())
+            // Transfer the balance using the tightly coupled pallet-balances module
+            pallet_balances::Pallet::transfer(OriginFor::from(Some(sender).into()), lookup_dest, value)?;
+            Ok(().into())
 		}
 
 		/// An example dispatchable that may throw a custom error.
