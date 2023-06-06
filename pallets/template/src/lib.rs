@@ -81,10 +81,10 @@ pub mod pallet {
 			let sender = ensure_signed(origin)?;
             let dest = T::Lookup::lookup(dest)?;
 			let lookup_dest = T::Lookup::unlookup(dest);
-            ensure!(pallet_identity::Pallet::has_identity(&sender,1), Error::NotAuthorized);
+            ensure!(pallet_identity::Pallet::<T>::has_identity(&sender,1), Error::<T>::NotAuthorized);
 
             // Transfer the balance using the tightly coupled pallet-balances module
-            pallet_balances::Pallet::transfer(OriginFor::from(Some(sender).into()), lookup_dest, value)?;
+            pallet_balances::Pallet::<T>::transfer(OriginFor::<T>::from(Some(sender).into()), lookup_dest, value)?;
             Ok(().into())
 		}
 
